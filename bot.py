@@ -1,72 +1,90 @@
 import asyncio
 import os
 import logging
+import sys
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.types import FSInputFile
 from pdf2docx import Converter
 
-# Tizimdan tokenni olyapmiz
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# 1. Loggingni sozlash (Faqat bir marta)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
 
-# Bot va Dispatcher obyektlarini yaratish
+# 2. Tokenni olish
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    logger.error("BOT_TOKEN topilmadi! Render Environment Variables qismini tekshiring.")
+    sys.exit(1)
+
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-logging.basicConfig(level=logging.INFO)
-
 @dp.message(F.document)
 async def handle_pdf(message: types.Message):
+    # Faqat PDF fayllarni tekshirish
     if not message.document.file_name.lower().endswith('.pdf'):
-        return await message.answer("Iltimos, PDF yuboring 📄")
+        return await message.answer("Iltimos, faqat PDF formatidagi fayl yuboring 📄")
 
     file_id = message.document.file_id
     file_name = message.document.file_name
+    # Word fayl nomi (asl nomi bilan bir xil qilish)
     doc_name = file_name.rsplit('.', 1)[0] + ".docx"
     
+    # Vaqtinchalik yo'llar (Render/Linux uchun /tmp ishlatish xavfsizroq)
+    pdf_path = f"/tmp/{file_id}.pdf"
+    word_path = f"/tmp/{file_id}.docx"
+    
     status_msg = await message.answer("🛠 **Professional tahlil ketmoqda...**\n(Betlar soni va joylashuv optimallashtirilmoqda)")
+    logger.info(f"Fayl ishlovga olindi: {file_name}")
 
     try:
         # Faylni yuklab olish
         file = await bot.get_file(file_id)
-        pdf_path = f"{file_id}.pdf"
-        word_path = f"{file_id}.docx"
         await bot.download_file(file.file_path, pdf_path)
 
-        # Konvertatsiya sozlamalari (Pullik servislar darajasida)
+        # Konvertatsiya sozlamalari
         cv = Converter(pdf_path)
-        
         cv.convert(
             word_path, 
             start=0, 
             end=None,
-            # --- MUHIM SOZLAMALAR ---
-            is_split_at_line_break=False, # Matnni qator oxirida majburan kesmaydi
-            is_arrange_text=True,         # Matn bloklarini mantiqiy tartiblaydi
-            is_fit_table=True,            # Jadvallarni sahifa kengligiga moslaydi
-            is_merge_text_block=True,     # Bo'lingan matn qismlarini birlashtiradi
-            line_margin=0.05,             # Qatorlar orasidagi masofani qisqartiradi (Bet ortib ketmasligi uchun)
-            force_page_size=True          # PDF sahifa o'lchamini Word'da majburan saqlaydi
+            is_split_at_line_break=False,
+            is_arrange_text=True,
+            is_fit_table=True,
+            is_merge_text_block=True,
+            line_margin=0.05,
+            force_page_size=True
         )
         cv.close()
 
         # Natijani yuborish
-        output_file = FSInputFile(word_path, filename=doc_name)
-        await message.answer_document(output_file, caption="✅ Optimizatsiya qilindi.")
+        if os.path.exists(word_path):
+            output_file = FSInputFile(word_path, filename=doc_name)
+            await message.answer_document(output_file, caption="✅ Optimizatsiya qilindi.")
+            logger.info(f"Fayl muvaffaqiyatli o'girildi: {doc_name}")
         
-        # Tozalash
-        os.remove(pdf_path)
-        os.remove(word_path)
+        # Fayllarni tozalash
+        for path in [pdf_path, word_path]:
+            if os.path.exists(path):
+                os.remove(path)
+        
         await status_msg.delete()
 
     except Exception as e:
-        await status_msg.edit_text(f"❌ Xatolik: {str(e)}")
+        logger.error(f"Xatolik yuz berdi: {str(e)}")
+        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}")
 
 @dp.message()
 async def start(message: types.Message):
-    await message.answer("Salom! PDF yuboring, men uni Word'ga **eng yuqori aniqlikda** o'girib beraman.")
+    await message.answer("Salom! PDF yuboring, men uni Word'ga **eng yuqori aniqlikda** o'girib beraman. 🚀")
 
 async def main():
+    logger.info("Bot polling rejimi ishga tushdi...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    await main()
+    asyncio.run(main())

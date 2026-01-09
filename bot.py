@@ -6,7 +6,7 @@ from aiogram.types import FSInputFile
 from pdf2docx import Converter
 
 # Tizimdan tokenni olyapmiz
-BOT_TOKEN = os.getenv("BOT-TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # Bot va Dispatcher obyektlarini yaratish
 bot = Bot(token=BOT_TOKEN)

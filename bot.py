@@ -5,6 +5,8 @@ import sys
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.types import FSInputFile
 from pdf2docx import Converter
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
 
 # 1. Loggingni sozlash (Faqat bir marta)
 logging.basicConfig(
@@ -78,13 +80,35 @@ async def handle_pdf(message: types.Message):
         logger.error(f"Xatolik yuz berdi: {str(e)}")
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}")
 
+
+# --- SHU YERDAN BOSHLAB O'ZGARTIRING ---
+# Render port talab qilgani uchun kichik soxta server
+class DummyHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running...")
+
+def run_dummy_server():
+    port = int(os.environ.get("PORT", 10000))
+    server_address = ('', port)
+    httpd = HTTPServer(server_address, DummyHandler)
+    logger.info(f"Soxta server {port}-portda ishga tushdi...")
+    httpd.serve_forever()
+
 @dp.message()
 async def start(message: types.Message):
     await message.answer("Salom! PDF yuboring, men uni Word'ga **eng yuqori aniqlikda** o'girib beraman. 🚀")
 
 async def main():
+    # Soxta serverni alohida oqimda (thread) yurgizish
+    threading.Thread(target=run_dummy_server, daemon=True).start()
+    
     logger.info("Bot polling rejimi ishga tushdi...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Bot to'xtatildi")

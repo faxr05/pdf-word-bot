@@ -1,5 +1,6 @@
 import asyncio
 import os
+from dotenv import load_dotenv
 import logging
 import sys
 from aiogram import Bot, Dispatcher, F, types
@@ -17,6 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 2. Tokenni olish
+load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     logger.error("BOT_TOKEN topilmadi! Render Environment Variables qismini tekshiring.")
